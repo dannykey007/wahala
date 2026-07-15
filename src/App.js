@@ -10,7 +10,7 @@ function dannysReminderApp() {
   const [dateTime, setDateTime] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeAlarm, setActiveAlarm] = useState(null);
-  
+
   // Pure React state to track if dark mode is turned on
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme_preference') === 'dark';
@@ -51,7 +51,7 @@ function dannysReminderApp() {
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
       gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
       osc.start();
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
@@ -126,11 +126,11 @@ function dannysReminderApp() {
 
   return (
     <div style={themeContainer}>
-      
+
       {/* Header section with theme toggle button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ margin: 0 }}>🔒 Private Reminders</h2>
-        <button 
+        <h2 style={{ margin: 0 }}>🔒 Danny's  Reminders</h2>
+        <button
           onClick={() => setDarkMode(!darkMode)}
           style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ccc', cursor: 'pointer', background: darkMode ? '#334155' : '#f1f5f9', color: darkMode ? '#fff' : '#000' }}
         >
@@ -141,7 +141,7 @@ function dannysReminderApp() {
       <p style={{ margin: '0 0 20px 0', color: darkMode ? '#94a3b8' : '#666', fontSize: '13px', textAlign: 'center' }}>
         No accounts. Keep this tab open on mobile to keep screen awake.
       </p>
-      
+
       {/* Alarm overlay block */}
       {activeAlarm && (
         <div style={{ padding: '16px', background: '#ef4444', color: 'white', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>
@@ -157,24 +157,24 @@ function dannysReminderApp() {
       <div style={{ padding: '12px', background: darkMode ? '#0f172a' : '#f5f5f7', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', fontWeight: '500' }}>
         🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
       </div>
-      
+
       {/* Input panel block */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-        <input 
-          type="text" 
-          value={text} 
-          onChange={(e) => setText(e.target.value)} 
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           placeholder="e.g., Turn off the stove..."
           style={inputStyle}
         />
-        
-        <input 
-          type="datetime-local" 
+
+        <input
+          type="datetime-local"
           value={dateTime}
           onChange={(e) => setDateTime(e.target.value)}
           style={inputStyle}
         />
-        
+
         <button onClick={addTodo} style={{ padding: '12px', background: '#0071e3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
           Set Audio Alarm
         </button>

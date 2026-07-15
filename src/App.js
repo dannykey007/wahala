@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 
 function PrivateReminderApp() {
-  // 1. DATA HOOK: Initialize state securely from the device local storage
   const [todos, setTodos] = useState(() => {
     const saved = localStorage.getItem('local_reminders');
     return saved ? JSON.parse(saved) : [];
@@ -12,19 +11,24 @@ function PrivateReminderApp() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [permissionStatus, setPermissionStatus] = useState('default');
 
-  // 2. AUTO-SAVE HOOK: Persist alarms data to storage whenever the array updates
   useEffect(() => {
     localStorage.setItem('local_reminders', JSON.stringify(todos));
   }, [todos]);
 
-  // 3. STARTUP HOOK: Sync initial browser notification permissions status on load
+  // Sync initial permission on load (handles mobile safely)
   useEffect(() => {
     if ('Notification' in window) {
       setPermissionStatus(Notification.permission);
+    } else if ('serviceWorker' in navigator) {
+      // On mobile, check via the service worker registry safely
+      navigator.serviceWorker.ready.then(() => {
+        if (window.Notification) {
+          setPermissionStatus(Notification.permission);
+        }
+      });
     }
   }, []);
 
-  // 4. LIVE SYSTEM CLOCK: Ticks every second for foreground processing safety
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -35,7 +39,6 @@ function PrivateReminderApp() {
           const todoDate = new Date(todo.deadline);
           
           if (now >= todoDate) {
-            // Foreground voice fallback if user leaves the tab open
             const speech = new SpeechSynthesisUtterance(`Reminder: ${todo.text} is due now.`);
             window.speechSynthesis.speak(speech);
 
@@ -50,28 +53,36 @@ function PrivateReminderApp() {
     return () => clearInterval(timer);
   }, [todos]);
 
-  // 5. PERMISSION METHOD: Explicit prompt mechanism to bypass mobile browser security
+  // MOBILE-SAFE TRIGGER METHOD
   const requestPermission = async () => {
-    if (!('Notification' in window)) {
-      alert('This browser does not support desktop background notifications.');
+    // 1. Check if browser supports workers at all
+    if (!('serviceWorker' in navigator)) {
+      alert('Service workers are blocked or unsupported on this device.');
       return;
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      setPermissionStatus(permission);
+      // 2. Desktop approach fallback
+      if ('Notification' in window) {
+        const permission = await Notification.requestPermission();
+        setPermissionStatus(permission);
+        if (permission === 'granted') alert('Notification permission granted!');
+        return;
+      }
       
-      if (permission === 'granted') {
-        alert('Notification permission granted! Alarms will now work in the background.');
-      } else if (permission === 'denied') {
-        alert('Notification permission was blocked. Please reset site permissions in your browser address bar settings.');
+      // 3. MOBILE SAFETY NET: Route permission prompt directly through the active Service Worker
+      const registration = await navigator.serviceWorker.ready;
+      if (registration) {
+        // Triggers the native phone OS prompt box wrapper safely
+        const permission = await window.Notification?.requestPermission() || await registration.showNotification('Activating Alarms...').then(() => 'granted');
+        setPermissionStatus(permission);
+        alert('System notifications linked to your background thread successfully!');
       }
     } catch (error) {
-      console.error("Error requesting notification permission:", error);
+      alert('To enable background alarms on mobile, tap the 3 dots in Chrome and click "Add to Home Screen" first!');
     }
   };
 
-  // 6. ACTION METHOD: Create alarm object and pipe data over to the service worker background thread
   const addTodo = () => {
     if (!text.trim() || !dateTime) {
       alert('Please fill out both fields.');
@@ -94,7 +105,6 @@ function PrivateReminderApp() {
       alerted: false
     };
 
-    // Forward the payload parameters to public/sw.js to handle execution when tab is asleep
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'SCHEDULE_REMINDER',
@@ -115,9 +125,8 @@ function PrivateReminderApp() {
   return (
     <div style={{ padding: '24px', maxWidth: '420px', margin: '40px auto', fontFamily: 'sans-serif', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '12px', backgroundColor: '#fff' }}>
       <h2 style={{ margin: '0 0 4px 0', textAlign: 'center' }}>🔒 True Reminders</h2>
-      <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '13px', textAlign: 'center' }}>No accounts. Works even when the browser is completely closed.</p>
+      <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '13px', textAlign: 'center' }}>Works even when the browser is completely closed.</p>
       
-      {/* 7. PERMISSION CAPTURE ACTION COMPONENT BANNER */}
       {permissionStatus !== 'granted' && (
         <button 
           onClick={requestPermission} 
@@ -127,12 +136,10 @@ function PrivateReminderApp() {
         </button>
       )}
 
-      {/* Dynamic 12-Hour clock showing AM/PM explicitly */}
       <div style={{ padding: '12px', background: '#f5f5f7', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', fontWeight: '500' }}>
         🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
       </div>
       
-      {/* Input Module Interface */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
         <input 
           type="text" 

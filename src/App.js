@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function PrivateReminderApp() {
   const [todos, setTodos] = useState(() => {
@@ -9,25 +9,64 @@ function PrivateReminderApp() {
   const [text, setText] = useState('');
   const [dateTime, setDateTime] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [permissionStatus, setPermissionStatus] = useState('default');
+  const [activeAlarm, setActiveAlarm] = useState(null);
+  
+  // DARK MODE HOOK STATE: Initialized from storage preferences
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('theme_preference') === 'dark';
+  });
+
+  const wakeLockRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem('local_reminders', JSON.stringify(todos));
   }, [todos]);
 
-  // Sync initial permission on load (handles mobile safely)
+  // THEME TRACKING MECHANISM EFFECT
   useEffect(() => {
-    if ('Notification' in window) {
-      setPermissionStatus(Notification.permission);
-    } else if ('serviceWorker' in navigator) {
-      // On mobile, check via the service worker registry safely
-      navigator.serviceWorker.ready.then(() => {
-        if (window.Notification) {
-          setPermissionStatus(Notification.permission);
+    localStorage.setItem('theme_preference', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
+  useEffect(() => {
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.log('Wake lock suspended:', err.message);
         }
-      });
+      }
     }
+    requestWakeLock();
+    return () => {
+      if (wakeLockRef.current) wakeLockRef.current.release();
+    };
   }, []);
+
+  const startAlarmSound = () => {
+    if (window.audioInterval) return;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    window.audioInterval = setInterval(() => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+      osc.stop(audioCtx.currentTime + 0.15);
+    }, 400);
+  };
+
+  const stopAlarmSound = () => {
+    if (window.audioInterval) {
+      clearInterval(window.audioInterval);
+      window.audioInterval = null;
+      setActiveAlarm(null);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -37,11 +76,9 @@ function PrivateReminderApp() {
       todos.forEach((todo, index) => {
         if (todo.deadline && !todo.alerted) {
           const todoDate = new Date(todo.deadline);
-          
           if (now >= todoDate) {
-            const speech = new SpeechSynthesisUtterance(`Reminder: ${todo.text} is due now.`);
-            window.speechSynthesis.speak(speech);
-
+            setActiveAlarm(todo.text);
+            startAlarmSound();
             const updatedTodos = [...todos];
             updatedTodos[index].alerted = true;
             setTodos(updatedTodos);
@@ -49,71 +86,15 @@ function PrivateReminderApp() {
         }
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, [todos]);
 
-  // MOBILE-SAFE TRIGGER METHOD
-  const requestPermission = async () => {
-    // 1. Check if browser supports workers at all
-    if (!('serviceWorker' in navigator)) {
-      alert('Service workers are blocked or unsupported on this device.');
-      return;
-    }
-
-    try {
-      // 2. Desktop approach fallback
-      if ('Notification' in window) {
-        const permission = await Notification.requestPermission();
-        setPermissionStatus(permission);
-        if (permission === 'granted') alert('Notification permission granted!');
-        return;
-      }
-      
-      // 3. MOBILE SAFETY NET: Route permission prompt directly through the active Service Worker
-      const registration = await navigator.serviceWorker.ready;
-      if (registration) {
-        // Triggers the native phone OS prompt box wrapper safely
-        const permission = await window.Notification?.requestPermission() || await registration.showNotification('Activating Alarms...').then(() => 'granted');
-        setPermissionStatus(permission);
-        alert('System notifications linked to your background thread successfully!');
-      }
-    } catch (error) {
-      alert('To enable background alarms on mobile, tap the 3 dots in Chrome and click "Add to Home Screen" first!');
-    }
-  };
-
   const addTodo = () => {
     if (!text.trim() || !dateTime) {
-      alert('Please fill out both fields.');
+      alert('Please fill out both the assignment field and due date parameters.');
       return;
     }
-
-    const targetTime = new Date(dateTime).getTime();
-    const currentTimeMs = Date.now();
-    const delay = targetTime - currentTimeMs;
-
-    if (delay <= 0) {
-      alert('Please select a time in the future!');
-      return;
-    }
-
-    const newTodo = {
-      id: Date.now(),
-      text: text,
-      deadline: dateTime,
-      alerted: false
-    };
-
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({
-        type: 'SCHEDULE_REMINDER',
-        text: text,
-        delay: delay
-      });
-    }
-
-    setTodos([...todos, newTodo]);
+    setTodos([...todos, { id: Date.now(), text, deadline: dateTime, alerted: false }]);
     setText('');
     setDateTime('');
   };
@@ -123,59 +104,97 @@ function PrivateReminderApp() {
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '420px', margin: '40px auto', fontFamily: 'sans-serif', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '12px', backgroundColor: '#fff' }}>
-      <h2 style={{ margin: '0 0 4px 0', textAlign: 'center' }}>🔒 True Reminders</h2>
-      <p style={{ margin: '0 0 20px 0', color: '#666', fontSize: '13px', textAlign: 'center' }}>Works even when the browser is completely closed.</p>
+    // Dynamic Main Background Container Wrapper Wrapper
+    <div className={`min-h-screen py-10 px-4 transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
       
-      {permissionStatus !== 'granted' && (
-        <button 
-          onClick={requestPermission} 
-          style={{ width: '100%', padding: '12px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '6px', marginBottom: '20px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
-        >
-          ⚠️ Click to Enable Device Notifications
-        </button>
-      )}
-
-      <div style={{ padding: '12px', background: '#f5f5f7', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', fontWeight: '500' }}>
-        🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-      </div>
-      
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-        <input 
-          type="text" 
-          value={text} 
-          onChange={(e) => setText(e.target.value)} 
-          placeholder="e.g., Turn off the stove..."
-          style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
-        />
+      <div className={`max-w-md mx-auto rounded-2xl p-6 shadow-xl border transition-all duration-300 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
         
-        <input 
-          type="datetime-local" 
-          value={dateTime}
-          onChange={(e) => setDateTime(e.target.value)}
-          style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
-        />
-        
-        <button onClick={addTodo} style={{ padding: '12px', background: '#0071e3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-          Set Background Alarm
-        </button>
-      </div>
+        {/* HEADER BLOCK WITH INTERACTIVE GRAPHICAL TOGGLE ACTION */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">⏰ QuickAlarms</h2>
+            <p className="text-xs opacity-60 mt-0.5">Secure sandbox localized reminder hub</p>
+          </div>
+          <button 
+            onClick={() => setDarkMode(!darkMode)}
+            className={`p-2.5 rounded-xl border text-lg transition-all active:scale-95 ${darkMode ? 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-yellow-400' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-indigo-600'}`}
+          >
+            {darkMode ? '☀️ Light' : '🌙 Dark'}
+          </button>
+        </div>
 
-      <h4 style={{ margin: '0 0 10px 0' }}>Active Alarms ({todos.filter(t => !t.alerted).length})</h4>
-      <ul style={{ listStyleType: 'none', paddingLeft: 0, margin: 0 }}>
-        {todos.length === 0 && <p style={{ color: '#999', fontSize: '14px' }}>No reminders set.</p>}
-        {todos.map((todo) => (
-          <li key={todo.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', marginBottom: '8px', borderRadius: '6px', border: '1px solid #eee', background: todo.alerted ? '#fafafa' : '#fff', opacity: todo.alerted ? 0.6 : 1 }}>
-            <div>
-              <div style={{ fontWeight: '500', fontSize: '15px', textDecoration: todo.alerted ? 'line-through' : 'none' }}>{todo.text}</div>
-              <small style={{ color: '#888' }}>
-                {new Date(todo.deadline).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
-              </small>
-            </div>
-            <button onClick={() => deleteTodo(todo.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>❌</button>
-          </li>
-        ))}
-      </ul>
+        {/* ALARM TRIGGERED BLAZING SCREEN BANNER OVERLAY EFFECT */}
+        {activeAlarm && (
+          <div className="bg-rose-500 text-white p-4 rounded-xl mb-5 text-center animate-pulse shadow-lg shadow-rose-500/20">
+            <h3 className="font-extrabold text-lg tracking-wide">🚨 TIMER ALERT DUE</h3>
+            <p className="font-semibold text-sm my-1 italic">"{activeAlarm}"</p>
+            <button 
+              onClick={stopAlarmSound} 
+              className="mt-2.5 px-5 py-1.5 bg-white text-rose-600 font-bold text-xs rounded-lg shadow hover:bg-slate-50 transition-all uppercase tracking-wider"
+            >
+              Silence Buzzer
+            </button>
+          </div>
+        )}
+
+        {/* CLOCK METRIC DISPLAY PANEL UNIT */}
+        <div className={`p-4 rounded-xl mb-6 text-center font-mono font-semibold text-base border ${darkMode ? 'bg-slate-900/50 border-slate-700/50 text-emerald-400' : 'bg-slate-50 border-slate-100 text-indigo-600'}`}>
+          🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+        </div>
+        
+        {/* USER CONFIGURATION INPUT FORM ELEMENT LAYOUT BLOCK */}
+        <div className="flex flex-col gap-3.5 mb-6">
+          <input 
+            type="text" 
+            value={text} 
+            onChange={(e) => setText(e.target.value)} 
+            placeholder="What should we track for you?"
+            className={`w-full p-3 rounded-xl border text-sm font-medium transition-all outline-none focus:ring-2 focus:ring-emerald-500 ${darkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-slate-300'}`}
+          />
+          
+          <input 
+            type="datetime-local" 
+            value={dateTime}
+            onChange={(e) => setDateTime(e.target.value)}
+            className={`w-full p-3 rounded-xl border text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-emerald-500 ${darkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-slate-300'}`}
+          />
+          
+          <button 
+            onClick={addTodo} 
+            className="w-full p-3.5 bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-500/10 hover:bg-emerald-600 active:scale-[0.99] transition-all tracking-wide"
+          >
+            Deploy Safe Localized Timer
+          </button>
+        </div>
+
+        {/* ALARMS RENDER ARRAY FEED WRAPPER PANEL */}
+        <div className="border-t pt-4 border-slate-100 dark:border-slate-700">
+          <h4 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-3">Active Pipeline ({todos.filter(t => !t.alerted).length})</h4>
+          <ul className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+            {todos.length === 0 && <p className="text-sm opacity-40 text-center py-4 italic">No trackers initialized inside local device storage.</p>}
+            {todos.map((todo) => (
+              <li 
+                key={todo.id} 
+                className={`flex justify-between items-center p-3 rounded-xl border transition-all ${todo.alerted ? 'opacity-40 border-dashed' : 'shadow-sm'} ${darkMode ? 'bg-slate-900/30 border-slate-700/60' : 'bg-slate-50/50 border-slate-200/60'}`}
+              >
+                <div className="truncate max-w-[80%]">
+                  <div className={`text-sm font-semibold truncate ${todo.alerted ? 'line-through opacity-70' : ''}`}>{todo.text}</div>
+                  <small className="text-[11px] font-medium opacity-50 block mt-0.5">
+                    {new Date(todo.deadline).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                  </small>
+                </div>
+                <button 
+                  onClick={() => deleteTodo(todo.id)} 
+                  className="p-1 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 text-base active:scale-90 transition-all"
+                >
+                  ❌
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+      </div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ function PrivateReminderApp() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeAlarm, setActiveAlarm] = useState(null);
   
-  // DARK MODE HOOK STATE: Initialized from storage preferences
+  // Pure React state to track if dark mode is turned on
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme_preference') === 'dark';
   });
@@ -22,7 +22,6 @@ function PrivateReminderApp() {
     localStorage.setItem('local_reminders', JSON.stringify(todos));
   }, [todos]);
 
-  // THEME TRACKING MECHANISM EFFECT
   useEffect(() => {
     localStorage.setItem('theme_preference', darkMode ? 'dark' : 'light');
   }, [darkMode]);
@@ -91,7 +90,7 @@ function PrivateReminderApp() {
 
   const addTodo = () => {
     if (!text.trim() || !dateTime) {
-      alert('Please fill out both the assignment field and due date parameters.');
+      alert('Please fill out both fields.');
       return;
     }
     setTodos([...todos, { id: Date.now(), text, deadline: dateTime, alerted: false }]);
@@ -103,98 +102,99 @@ function PrivateReminderApp() {
     setTodos(todos.filter(todo => todo.id !== idToDelete));
   };
 
+  // Defining style themes using pure JavaScript objects
+  const themeContainer = {
+    padding: '24px',
+    maxWidth: '420px',
+    margin: '40px auto',
+    fontFamily: 'sans-serif',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    borderRadius: '12px',
+    transition: 'background-color 0.3s, color 0.3s',
+    backgroundColor: darkMode ? '#1e293b' : '#ffffff',
+    color: darkMode ? '#ffffff' : '#334155'
+  };
+
+  const inputStyle = {
+    padding: '10px',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '14px',
+    backgroundColor: darkMode ? '#334155' : '#ffffff',
+    color: darkMode ? '#ffffff' : '#000000'
+  };
+
   return (
-    // Dynamic Main Background Container Wrapper Wrapper
-    <div className={`min-h-screen py-10 px-4 transition-colors duration-300 ${darkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
+    <div style={themeContainer}>
       
-      <div className={`max-w-md mx-auto rounded-2xl p-6 shadow-xl border transition-all duration-300 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-        
-        {/* HEADER BLOCK WITH INTERACTIVE GRAPHICAL TOGGLE ACTION */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">⏰ QuickAlarms</h2>
-            <p className="text-xs opacity-60 mt-0.5">Secure sandbox localized reminder hub</p>
-          </div>
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            className={`p-2.5 rounded-xl border text-lg transition-all active:scale-95 ${darkMode ? 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-yellow-400' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-indigo-600'}`}
-          >
-            {darkMode ? '☀️ Light' : '🌙 Dark'}
-          </button>
-        </div>
-
-        {/* ALARM TRIGGERED BLAZING SCREEN BANNER OVERLAY EFFECT */}
-        {activeAlarm && (
-          <div className="bg-rose-500 text-white p-4 rounded-xl mb-5 text-center animate-pulse shadow-lg shadow-rose-500/20">
-            <h3 className="font-extrabold text-lg tracking-wide">🚨 TIMER ALERT DUE</h3>
-            <p className="font-semibold text-sm my-1 italic">"{activeAlarm}"</p>
-            <button 
-              onClick={stopAlarmSound} 
-              className="mt-2.5 px-5 py-1.5 bg-white text-rose-600 font-bold text-xs rounded-lg shadow hover:bg-slate-50 transition-all uppercase tracking-wider"
-            >
-              Silence Buzzer
-            </button>
-          </div>
-        )}
-
-        {/* CLOCK METRIC DISPLAY PANEL UNIT */}
-        <div className={`p-4 rounded-xl mb-6 text-center font-mono font-semibold text-base border ${darkMode ? 'bg-slate-900/50 border-slate-700/50 text-emerald-400' : 'bg-slate-50 border-slate-100 text-indigo-600'}`}>
-          🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-        </div>
-        
-        {/* USER CONFIGURATION INPUT FORM ELEMENT LAYOUT BLOCK */}
-        <div className="flex flex-col gap-3.5 mb-6">
-          <input 
-            type="text" 
-            value={text} 
-            onChange={(e) => setText(e.target.value)} 
-            placeholder="What should we track for you?"
-            className={`w-full p-3 rounded-xl border text-sm font-medium transition-all outline-none focus:ring-2 focus:ring-emerald-500 ${darkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-slate-300'}`}
-          />
-          
-          <input 
-            type="datetime-local" 
-            value={dateTime}
-            onChange={(e) => setDateTime(e.target.value)}
-            className={`w-full p-3 rounded-xl border text-sm font-semibold transition-all outline-none focus:ring-2 focus:ring-emerald-500 ${darkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-slate-300'}`}
-          />
-          
-          <button 
-            onClick={addTodo} 
-            className="w-full p-3.5 bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-500/10 hover:bg-emerald-600 active:scale-[0.99] transition-all tracking-wide"
-          >
-            Deploy Safe Localized Timer
-          </button>
-        </div>
-
-        {/* ALARMS RENDER ARRAY FEED WRAPPER PANEL */}
-        <div className="border-t pt-4 border-slate-100 dark:border-slate-700">
-          <h4 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-3">Active Pipeline ({todos.filter(t => !t.alerted).length})</h4>
-          <ul className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-            {todos.length === 0 && <p className="text-sm opacity-40 text-center py-4 italic">No trackers initialized inside local device storage.</p>}
-            {todos.map((todo) => (
-              <li 
-                key={todo.id} 
-                className={`flex justify-between items-center p-3 rounded-xl border transition-all ${todo.alerted ? 'opacity-40 border-dashed' : 'shadow-sm'} ${darkMode ? 'bg-slate-900/30 border-slate-700/60' : 'bg-slate-50/50 border-slate-200/60'}`}
-              >
-                <div className="truncate max-w-[80%]">
-                  <div className={`text-sm font-semibold truncate ${todo.alerted ? 'line-through opacity-70' : ''}`}>{todo.text}</div>
-                  <small className="text-[11px] font-medium opacity-50 block mt-0.5">
-                    {new Date(todo.deadline).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
-                  </small>
-                </div>
-                <button 
-                  onClick={() => deleteTodo(todo.id)} 
-                  className="p-1 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 text-base active:scale-90 transition-all"
-                >
-                  ❌
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
+      {/* Header section with theme toggle button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 style={{ margin: 0 }}>🔒 Private Reminders</h2>
+        <button 
+          onClick={() => setDarkMode(!darkMode)}
+          style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ccc', cursor: 'pointer', background: darkMode ? '#334155' : '#f1f5f9', color: darkMode ? '#fff' : '#000' }}
+        >
+          {darkMode ? '☀️ Light' : '🌙 Dark'}
+        </button>
       </div>
+
+      <p style={{ margin: '0 0 20px 0', color: darkMode ? '#94a3b8' : '#666', fontSize: '13px', textAlign: 'center' }}>
+        No accounts. Keep this tab open on mobile to keep screen awake.
+      </p>
+      
+      {/* Alarm overlay block */}
+      {activeAlarm && (
+        <div style={{ padding: '16px', background: '#ef4444', color: 'white', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>
+          <h3 style={{ margin: '0 0 8px 0' }}>🚨 ALARM RINGING!</h3>
+          <p style={{ margin: '0 0 12px 0', fontWeight: 'bold' }}>{activeAlarm}</p>
+          <button onClick={stopAlarmSound} style={{ padding: '8px 16px', background: 'white', color: '#ef4444', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+            DISMISS ALARM
+          </button>
+        </div>
+      )}
+
+      {/* Clock section */}
+      <div style={{ padding: '12px', background: darkMode ? '#0f172a' : '#f5f5f7', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', fontWeight: '500' }}>
+        🕒 System Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+      </div>
+      
+      {/* Input panel block */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+        <input 
+          type="text" 
+          value={text} 
+          onChange={(e) => setText(e.target.value)} 
+          placeholder="e.g., Turn off the stove..."
+          style={inputStyle}
+        />
+        
+        <input 
+          type="datetime-local" 
+          value={dateTime}
+          onChange={(e) => setDateTime(e.target.value)}
+          style={inputStyle}
+        />
+        
+        <button onClick={addTodo} style={{ padding: '12px', background: '#0071e3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+          Set Audio Alarm
+        </button>
+      </div>
+
+      <h4 style={{ margin: '0 0 10px 0' }}>Active Alarms ({todos.filter(t => !t.alerted).length})</h4>
+      <ul style={{ listStyleType: 'none', paddingLeft: 0, margin: 0 }}>
+        {todos.length === 0 && <p style={{ color: '#999', fontSize: '14px' }}>No reminders set.</p>}
+        {todos.map((todo) => (
+          <li key={todo.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', marginBottom: '8px', borderRadius: '6px', border: '1px solid #eee', background: todo.alerted ? (darkMode ? '#334155' : '#fafafa') : 'transparent', opacity: todo.alerted ? 0.6 : 1 }}>
+            <div>
+              <div style={{ fontWeight: '500', fontSize: '15px', textDecoration: todo.alerted ? 'line-through' : 'none' }}>{todo.text}</div>
+              <small style={{ color: darkMode ? '#94a3b8' : '#888' }}>
+                {new Date(todo.deadline).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+              </small>
+            </div>
+            <button onClick={() => deleteTodo(todo.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>❌</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

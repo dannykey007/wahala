@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-function PrivateReminderApp() {
+function dannysReminderApp() {
   const [todos, setTodos] = useState(() => {
     const saved = localStorage.getItem('local_reminders');
     return saved ? JSON.parse(saved) : [];
